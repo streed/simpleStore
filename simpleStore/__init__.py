@@ -24,9 +24,33 @@ def distribute_set( args, origin, host ):
 		if h != origin:
 			host_str = "http://%s/set?%s" % ( h, set_str )
 
-			app.logger.debug( "Propagating to %s" % host_str )
+			app.logger.debug( "Propagating set to %s" % host_str )
 
 			requests.get( host_str, headers=headers )
+
+@async
+def distribute_del( key, origin, host ):
+	for h in app.hosts:
+		host_str = "http://%s/delete/%s" % ( h, key )
+
+		app.logger.debug( "Propagating delete to %s" % host_str )
+
+		requests.get( host_str )
+
+@async
+def distribute_get( key, origin, host ):
+
+	headers = { "Propagate": True, "OriginHost": host }
+	
+	for h in app.hosts:
+		if h != origin:
+			host_str = "http://%s/get/%s" % ( h, key )
+
+			result = requests.get( host_str, headers=headers )
+
+			if not result.text == "":
+				data[key] = result.text
+				break
 
 @async
 def send_pings( me ):
@@ -71,16 +95,37 @@ def set_value():
 	return "OK"
 
 
-@app.route( "/get/<value>" )
-def get_value( value ):
+@app.route( "/get/<key>" )
+def get_value( key ):
 
-	if value in data:
-		return jsonify( **{ value: data[value] } )
+	app.logger.debug( "Trying to get the value for %s" % key )
+	if key in data:
+		return data[key]
+	else:
+		app.logger.debug( "The key did not exist so lets try and grab it from the other nodes." )
+		app.logger.debug( "Should we propagate the set value?" )
+		if not "Propagate" in request.headers: 
+			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
+			distribute_get( key, "", request.host )
+		else:
+			app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
+			origin = request.headers.get( "OriginHost" )
+			distribute_get( key, origin, request.host )
 
 	return ""
 
-@app.route( "/delete/<value>" )
-def delete_value( value ):
-	del data[value]
+@app.route( "/delete/<key>" )
+def delete_value( key ):
+	del data[key]
+
+	app.logger.debug( "Should we propagate the set value?" )
+	if not "Propagate" in request.headers: 
+		app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
+		distribute_del( key, "", request.host )
+	else:
+		app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
+		origin = request.headers.get( "OriginHost" )
+		distribute_del( key, origin, request.host )
 
 	return "OK"
+
