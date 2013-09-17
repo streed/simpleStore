@@ -16,37 +16,49 @@ def async( f ):
 	
 	return wrapper
 
+def get( h, host_str, headers={} ):
+
+	try:
+		return requests.get( host_str, headers=headers, timeout=5 )
+	except requests.exceptions.ConnectionError:
+		app.logger.debug( "Removing %s from the hosts list, because it appears to be down." % ( h ) )
+		index = app.hosts.index( h )
+		del app.hosts[index]
+		raise
+
 @async
 def distribute_set( args, origin, host ):
 	set_str = "&".join( [ "%s=%s" % ( k, v ) for k, v in args.iteritems() ] )
 	headers = { "Propagate": True, "OriginHost": host }
-	for h in app.hosts:
+	hosts = app.hosts[:]
+	for h in hosts:
 		if h != origin:
 			host_str = "http://%s/set?%s" % ( h, set_str )
 
 			app.logger.debug( "Propagating set to %s" % host_str )
 
-			requests.get( host_str, headers=headers )
+			get( h, host_str, headers=headers )
 
 @async
 def distribute_del( key, origin, host ):
-	for h in app.hosts:
+	hosts = app.hosts[:]
+	for h in hosts:
 		host_str = "http://%s/delete/%s" % ( h, key )
 
 		app.logger.debug( "Propagating delete to %s" % host_str )
 
-		requests.get( host_str )
-
+		get( h, host_str, headers=headers )
 @async
 def distribute_get( key, origin, host ):
 
 	headers = { "Propagate": True, "OriginHost": host }
 	
-	for h in app.hosts:
+	hosts = app.hosts[:]
+	for h in hosts:
 		if h != origin:
 			host_str = "http://%s/get/%s" % ( h, key )
 
-			result = requests.get( host_str, headers=headers )
+			result = get( h, host_str, headers=headers )
 
 			if not result.text == "":
 				data[key] = result.text
@@ -54,15 +66,16 @@ def distribute_get( key, origin, host ):
 
 @async
 def send_pings( me ):
-	for h in app.hosts:
+	hosts = app.hosts[:]
+	for h in hosts:
 		host_str = "http://%s/ping?me=%s" % ( h, me )
-		result = requests.get( host_str )
+		result = get( h, host_str )
 		
 		if not result.text in app.hosts:
 			app.logger.debug( "New host: %s" % result.text )
 			app.hosts.append( result.text )
 
-@app.before_first_request
+#@app.before_first_request
 def send_the_pings():
 	send_pings( request.host )
 
