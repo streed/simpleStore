@@ -53,9 +53,10 @@ def distribute_set( args, origin, host ):
 
 @async
 def distribute_del( key, origin, host ):
+	headers = { "Propagate": True, "OriginHost": host }
 	hosts = app.hosts[:]
 	for h in hosts:
-		host_str = "http://%s/delete/%s" % ( h, key )
+		host_str = "http://%s/del/%s" % ( h, key )
 
 		app.logger.debug( "Propagating delete to %s" % host_str )
 
@@ -101,7 +102,7 @@ def ping():
 	return request.host
 
 @app.route( "/set" )
-def set_value():
+def set_key():
 
 	for k, v in request.args.iteritems():
 		app.logger.debug( "Setting %s => %s" % ( k, v ) )
@@ -121,7 +122,7 @@ def set_value():
 
 
 @app.route( "/get/<key>" )
-def get_value( key ):
+def get_key( key ):
 
 	app.logger.debug( "Trying to get the value for %s" % key )
 	if key in data:
@@ -139,11 +140,11 @@ def get_value( key ):
 
 	return ""
 
-@app.route( "/delete/<key>" )
-def delete_value( key ):
+@app.route( "/del/<key>" )
+def del_key( key ):
 	del data[key]
 
-	app.logger.debug( "Should we propagate the set value?" )
+	app.logger.debug( "Should we propagate the del value?" )
 	if not "Propagate" in request.headers: 
 		app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
 		distribute_del( key, "", request.host )
@@ -152,5 +153,5 @@ def delete_value( key ):
 		origin = request.headers.get( "OriginHost" )
 		distribute_del( key, origin, request.host )
 
-	return "OK"
+	return ""
 
