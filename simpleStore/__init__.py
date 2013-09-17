@@ -106,22 +106,35 @@ def ping():
 
 	return request.host
 
+@app.route( "/dump" )
+def dump():
+	return app.encoder( data )
+
 @app.route( "/set" )
 def set_key():
 
+	changes = {}
+
 	for k, v in request.args.iteritems():
 		app.logger.debug( "Setting %s => %s" % ( k, v ) )
-		data[k] = v
+		if k not in data:
+			changes[k] = v
+			data[k] = v
+		else:
+			if v != data[k]:
+				changes[k] = v
+				data[k] = v
 
-	app.logger.debug( "Should we propagate the set value?" )
-	if not "Propagate" in request.headers: 
-		app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
-		distribute_set( request.args, request.host, request.host )
-	else:
-		app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
-		origin = request.headers.get( "OriginHost" )
-		distribute_set( request.args, origin, request.host )
 
+	if changes != {}:
+		app.logger.debug( "Should we propagate the set value?" )
+		if not "Propagate" in request.headers: 
+			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
+			distribute_set( changes, request.host, request.host )
+		else:
+			app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
+			origin = request.headers.get( "OriginHost" )
+			distribute_set( changes, origin, request.host )
 
 	return ""
 
@@ -134,7 +147,7 @@ def get_key( key ):
 		return app.encoder( data[key] )
 	else:
 		app.logger.debug( "The key did not exist so lets try and grab it from the other nodes." )
-		app.logger.debug( "Should we propagate the set value?" )
+		app.logger.debug( "Shold we propagate the set value?" )
 		if not "Propagate" in request.headers: 
 			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
 			distribute_get( key, request.host, request.host )
