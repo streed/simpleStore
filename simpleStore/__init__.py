@@ -1,3 +1,4 @@
+import json
 import requests
 from flask import Flask, request, jsonify, url_for, g
 from functools import wraps
@@ -5,6 +6,17 @@ from threading import Thread
 
 app = Flask( __name__ )
 app.hosts = []
+
+def decoder( js ):
+	return js
+
+def encoder( v ):
+	print v
+	return json.dumps( { "value": v } )
+
+app.encoder = encoder
+app.decoder = decoder
+
 
 data = {}
 
@@ -105,7 +117,7 @@ def set_value():
 		distribute_set( request.args, origin, request.host )
 
 
-	return "OK"
+	return ""
 
 
 @app.route( "/get/<key>" )
@@ -113,7 +125,7 @@ def get_value( key ):
 
 	app.logger.debug( "Trying to get the value for %s" % key )
 	if key in data:
-		return data[key]
+		return app.encoder( data[key] )
 	else:
 		app.logger.debug( "The key did not exist so lets try and grab it from the other nodes." )
 		app.logger.debug( "Should we propagate the set value?" )
