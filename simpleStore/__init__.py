@@ -8,7 +8,8 @@ app = Flask( __name__ )
 app.hosts = []
 
 def decoder( js ):
-	return js
+	d = json.loads( js )
+	return d["value"]
 
 def encoder( v ):
 	print v
@@ -41,10 +42,11 @@ def get( h, host_str, headers={} ):
 @async
 def distribute_set( args, origin, host ):
 	set_str = "&".join( [ "%s=%s" % ( k, v ) for k, v in args.iteritems() ] )
-	headers = { "Propagate": True, "OriginHost": host }
+	headers = { "Propagate": True, "OriginHost": origin, "LastHost": host }
 	hosts = app.hosts[:]
 	for h in hosts:
-		if h != origin:
+
+		if h != origin and h != host:
 			host_str = "http://%s/set?%s" % ( h, set_str )
 
 			app.logger.debug( "Propagating set to %s" % host_str )
@@ -53,28 +55,31 @@ def distribute_set( args, origin, host ):
 
 @async
 def distribute_del( key, origin, host ):
-	headers = { "Propagate": True, "OriginHost": host }
+	headers = { "Propagate": True, "OriginHost": origin, "LastHost": host }
 	hosts = app.hosts[:]
 	for h in hosts:
-		host_str = "http://%s/del/%s" % ( h, key )
+		if h != origin and h != host:
+			host_str = "http://%s/del/%s" % ( h, key )
 
-		app.logger.debug( "Propagating delete to %s" % host_str )
+			app.logger.debug( "Propagating delete to %s" % host_str )
 
-		get( h, host_str, headers=headers )
+			get( h, host_str, headers=headers )
+
 @async
 def distribute_get( key, origin, host ):
 
-	headers = { "Propagate": True, "OriginHost": host }
+	headers = { "Propagate": True, "OriginHost": origin, "LastHost": host }
 	
 	hosts = app.hosts[:]
 	for h in hosts:
-		if h != origin:
+		app.logger.debug( "origin %s" % origin )
+		if h != origin and h != host:
 			host_str = "http://%s/get/%s" % ( h, key )
 
 			result = get( h, host_str, headers=headers )
 
 			if not result.text == "":
-				data[key] = result.text
+				data[key] = app.decoder( result.text )
 				break
 
 @async
@@ -111,7 +116,7 @@ def set_key():
 	app.logger.debug( "Should we propagate the set value?" )
 	if not "Propagate" in request.headers: 
 		app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
-		distribute_set( request.args, "", request.host )
+		distribute_set( request.args, request.host, request.host )
 	else:
 		app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
 		origin = request.headers.get( "OriginHost" )
@@ -132,7 +137,7 @@ def get_key( key ):
 		app.logger.debug( "Should we propagate the set value?" )
 		if not "Propagate" in request.headers: 
 			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
-			distribute_get( key, "", request.host )
+			distribute_get( key, request.host, request.host )
 		else:
 			app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
 			origin = request.headers.get( "OriginHost" )
@@ -148,10 +153,12 @@ def del_key( key ):
 		app.logger.debug( "Should we propagate the del value?" )
 		if not "Propagate" in request.headers: 
 			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
-			distribute_del( key, "", request.host )
+			distribute_del( key, request.host, request.host )
 		else:
 			app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
 			origin = request.headers.get( "OriginHost" )
+
+			app.logger.debug( "OriginHost: %s" % origin )
 			distribute_del( key, origin, request.host )
 
 	return ""
