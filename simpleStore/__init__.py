@@ -142,16 +142,17 @@ def get_key( key ):
 
 @app.route( "/del/<key>" )
 def del_key( key ):
-	del data[key]
+	if key in data:
+		del data[key]
 
-	app.logger.debug( "Should we propagate the del value?" )
-	if not "Propagate" in request.headers: 
-		app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
-		distribute_del( key, "", request.host )
-	else:
-		app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
-		origin = request.headers.get( "OriginHost" )
-		distribute_del( key, origin, request.host )
+		app.logger.debug( "Should we propagate the del value?" )
+		if not "Propagate" in request.headers: 
+			app.logger.debug( "No `Propagate` in headers so let's start the propagation." )
+			distribute_del( key, "", request.host )
+		else:
+			app.logger.debug( "There was a `Propagate` in the headers so there must be a `OriginHost` as well so lets grab it and then start propagating." )
+			origin = request.headers.get( "OriginHost" )
+			distribute_del( key, origin, request.host )
 
 	return ""
 
