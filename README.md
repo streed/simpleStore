@@ -53,7 +53,26 @@ infinite propagation through the node graph. But the following query will work p
     { "value": "hello world" }
 
 
-Now if a key is set on D it will follow the same pattern and eventually get to all of the nodes by the propagation method.
+Now if a key is set on D it will follow the same pattern and eventually get to all of the nodes by the propagation method as long as there exists a path between the nodes.
 
-It is sup[er simple, but it works and can be made much more robust and is on my TODO plate.
+Now, given the next setup with a single node.
 
+    A: run.py 8000 B:8001
+    
+The above is simply a single node with the ability to eventually use another node running on port 8001 on host B. So, a key is added to the system.
+
+    curl http://A:8000/set?msg=hello world
+    
+Now the descision that the cluster, the single node, just can't handle the current load so the descision is made to add two more
+nodes to the cluster.
+
+    B: run.py 8001 A:8000 C:8002
+    C: run.py 8002 B:8001
+    
+So, there are the extra nodes. Now a request comes into node C.
+
+    curl http://B:8002/get/msg
+    
+But, at this point the key `msg` does not exist on the node C so it sets out to discover the value. It goes to its neighbor B, but since this node was just added it must also discover the value so it goes to it's neighbor A. 
+From this point the key exists and the value `hello world` is returned to B. B now fowards this value back to C as well as stores it locally. C receives the forward
+and then inserts it into its store. Now the client can easily retreive the value again and get the new value.
