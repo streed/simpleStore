@@ -53,7 +53,5 @@ infinite propagation through the node graph. But the following query will work p
     { "value": "hello world" }
 
 
-Now if a key is set on D it will follow the same pattern and eventually get to all of the nodes by the propagation method.
-
-It is sup[er simple, but it works and can be made much more robust and is on my TODO plate.
+Now if a key is set on D it will follow the same pattern and eventually get to all of the nodes by the propagation method as long as there exists a path between the nodes.
 
