@@ -35,7 +35,8 @@ def get( h, host_str, headers={} ):
 	try:
 		return requests.get( host_str, headers=headers, timeout=5 )
 	except requests.exceptions.ConnectionError:
-		raise
+		app.logger.debug( "Host %s is down." % h )
+		pass
 
 def make_request( h, action, key, origin, host, last, args={} ):
 	args_str = "&".join( [ "%s=%s" % ( k, v ) for k, v in args.iteritems() ] )
@@ -84,15 +85,6 @@ def distribute_get( key, origin, host, packet, last ):
 			make_request( last, "fwd", "", origin, host, last, args={ "key": key, "value": data[key], "packet": packet } )
 			break
 
-@app.route( "/ping" )
-def ping():
-	host = request.args["me"]
-
-	if not host in app.hosts:
-		app.hosts.append( host )
-
-	return request.host
-
 @app.route( "/dump" )
 def dump():
 	return app.encoder( [ data, packets ] )
@@ -110,7 +102,6 @@ def set_key():
 			if v != data[k]:
 				changes[k] = v
 				data[k] = v
-
 
 	if changes != {}:
 		if not "Propagate" in request.headers: 
@@ -179,3 +170,4 @@ def fwd_key():
 			make_request( last, "fwd", "", request.host, "", { "key": key, "value": value, "packet": packet } )
 
 	return ""
+
