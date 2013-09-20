@@ -1,4 +1,5 @@
 import json
+import random
 import requests
 import time
 import uuid
@@ -19,8 +20,34 @@ def encoder( v ):
 app.encoder = encoder
 app.decoder = decoder
 
+app.master = None
+app.parent = None
+app.left = None
+app.right = None
+
 packets = {}
 data = {}
+
+@app.before_first_request
+def insert_into_network():
+	if app.master:
+		host = app.master
+		result = None
+		while  result != "":
+			result = make_request( host, "add", "", request.host, request.host, request.host, args={ "them": request.host } )
+
+			txt = result.text
+
+			app.logger.debug( txt )
+
+			if txt != "":
+				result = result.json()
+
+				host = result["value"][0].decode( "utf-8" )
+			else:
+				result = txt
+				app.parent = host
+
 
 def async( f ):
 	@wraps( f )
@@ -56,38 +83,38 @@ def make_request( h, action, key, origin, host, last, args={} ):
 	if args_str != "":
 		host_str += "?%s" % args_str
 
-	app.logger.debug( host_str )
 	if h != host:
-
 		return get( h, host_str, headers=headers )
 
 @async
 def distribute_set( args, origin, host, packet, last ):
 	if packet in packets:
 		return
-	for h in app.hosts:
-		make_request( h, "set", "", origin, host, last, args=args )
+	for h in [ app.left, app.right, app.parent ]:
+		if h != None:
+			make_request( h, "set", "", origin, host, last, args=args )
 
 @async
 def distribute_del( key, origin, host, packet, last ):
 	if packet in packets:
 		return
-	for h in app.osts:
-		make_request( h, "del", key )
+	for h in [ app.left, app.right, app.parent ]:
+		if h != None:
+			make_request( h, "del", key )
 
 @async
 def distribute_get( key, origin, host, packet, last ):
-	for h in app.hosts:
-		result = make_request( h, "get", key, origin, host, last )
-		app.logger.debug( result.text )
-		if result and result.text != "":
-			data[key] = app.decoder( result.text )
-			make_request( last, "fwd", "", origin, host, last, args={ "key": key, "value": data[key], "packet": packet } )
-			break
+	for h in [ app.left, app.right, app.parent ]:
+		if h != None:
+			result = make_request( h, "get", key, origin, host, last )
+			if result and result.text != "":
+				data[key] = app.decoder( result.text )
+				make_request( last, "fwd", "", origin, host, last, args={ "key": key, "value": data[key], "packet": packet } )
+				break
 
 @app.route( "/dump" )
 def dump():
-	return app.encoder( [ data, packets ] )
+	return app.encoder( [ data, packets, { "left": app.left, "right": app.right, "parent": app.parent } ] )
 
 @app.route( "/set" )
 def set_key():
@@ -134,6 +161,7 @@ def get_key( key ):
 			if not packet in packets:
 				packets[packet] = ( True, timestamp, last )
 				distribute_get( key, origin, request.host, packet, last )
+		return "TryAgain"
 
 	return ""
 
@@ -171,3 +199,16 @@ def fwd_key():
 
 	return ""
 
+@app.route( "/add" )
+def add_node():
+	them = request.args.get( "them" )
+
+	if app.left == None and app.right != them:
+		app.left = them
+	elif app.right == None and app.left != them:
+		app.right = them
+	else:
+		if all( [ them != i for i in [ app.left, app.right ] ] ):
+			recurse = random.choice( [ app.left, app.right ] )
+			return app.encoder( [ recurse ] )
+	return ""
